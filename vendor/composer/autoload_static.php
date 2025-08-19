@@ -400,8 +400,8 @@ class ComposerStaticInitc02380df1c542bb2e365671ad7814180
         ),
         'Psr\\Http\\Message\\' => 
         array (
-            0 => __DIR__ . '/..' . '/psr/http-message/src',
-            1 => __DIR__ . '/..' . '/psr/http-factory/src',
+            0 => __DIR__ . '/..' . '/psr/http-factory/src',
+            1 => __DIR__ . '/..' . '/psr/http-message/src',
         ),
         'Psr\\Http\\Client\\' => 
         array (
@@ -599,9 +599,21 @@ class ComposerStaticInitc02380df1c542bb2e365671ad7814180
     );
 
     public static $classMap = array (
+        'App\\Console\\Kernel' => __DIR__ . '/../..' . '/app/Console/Kernel.php',
+        'App\\Exceptions\\Handler' => __DIR__ . '/../..' . '/app/Exceptions/Handler.php',
         'App\\Http\\Controllers\\DocumentController' => __DIR__ . '/../..' . '/app/Http/Controllers/DocumentController.php',
         'App\\Http\\Controllers\\MinuteController' => __DIR__ . '/../..' . '/app/Http/Controllers/MinuteController.php',
         'App\\Http\\Controllers\\SearchController' => __DIR__ . '/../..' . '/app/Http/Controllers/SearchController.php',
+        'App\\Http\\Kernel' => __DIR__ . '/../..' . '/app/Http/Kernel.php',
+        'App\\Http\\Middleware\\Authenticate' => __DIR__ . '/../..' . '/app/Http/Middleware/Authenticate.php',
+        'App\\Http\\Middleware\\EncryptCookies' => __DIR__ . '/../..' . '/app/Http/Middleware/EncryptCookies.php',
+        'App\\Http\\Middleware\\PreventRequestsDuringMaintenance' => __DIR__ . '/../..' . '/app/Http/Middleware/PreventRequestsDuringMaintenance.php',
+        'App\\Http\\Middleware\\RedirectIfAuthenticated' => __DIR__ . '/../..' . '/app/Http/Middleware/RedirectIfAuthenticated.php',
+        'App\\Http\\Middleware\\TrimStrings' => __DIR__ . '/../..' . '/app/Http/Middleware/TrimStrings.php',
+        'App\\Http\\Middleware\\TrustHosts' => __DIR__ . '/../..' . '/app/Http/Middleware/TrustHosts.php',
+        'App\\Http\\Middleware\\TrustProxies' => __DIR__ . '/../..' . '/app/Http/Middleware/TrustProxies.php',
+        'App\\Http\\Middleware\\ValidateSignature' => __DIR__ . '/../..' . '/app/Http/Middleware/ValidateSignature.php',
+        'App\\Http\\Middleware\\VerifyCsrfToken' => __DIR__ . '/../..' . '/app/Http/Middleware/VerifyCsrfToken.php',
         'App\\Jobs\\ProcessDocumentOCR' => __DIR__ . '/../..' . '/app/Jobs/ProcessDocumentOCR.php',
         'App\\Jobs\\ScanDocumentForVirus' => __DIR__ . '/../..' . '/app/Jobs/ScanDocumentForVirus.php',
         'App\\Models\\Department' => __DIR__ . '/../..' . '/app/Models/Department.php',
@@ -613,6 +625,11 @@ class ComposerStaticInitc02380df1c542bb2e365671ad7814180
         'App\\Notifications\\DocumentScanned' => __DIR__ . '/../..' . '/app/Notifications/DocumentScanned.php',
         'App\\Policies\\DocumentPolicy' => __DIR__ . '/../..' . '/app/Policies/DocumentPolicy.php',
         'App\\Policies\\MinutePolicy' => __DIR__ . '/../..' . '/app/Policies/MinutePolicy.php',
+        'App\\Providers\\AppServiceProvider' => __DIR__ . '/../..' . '/app/Providers/AppServiceProvider.php',
+        'App\\Providers\\AuthServiceProvider' => __DIR__ . '/../..' . '/app/Providers/AuthServiceProvider.php',
+        'App\\Providers\\BroadcastServiceProvider' => __DIR__ . '/../..' . '/app/Providers/BroadcastServiceProvider.php',
+        'App\\Providers\\EventServiceProvider' => __DIR__ . '/../..' . '/app/Providers/EventServiceProvider.php',
+        'App\\Providers\\RouteServiceProvider' => __DIR__ . '/../..' . '/app/Providers/RouteServiceProvider.php',
         'Attribute' => __DIR__ . '/..' . '/symfony/polyfill-php80/Resources/stubs/Attribute.php',
         'Barryvdh\\DomPDF\\Facade\\Pdf' => __DIR__ . '/..' . '/barryvdh/laravel-dompdf/src/Facade/Pdf.php',
         'Barryvdh\\DomPDF\\PDF' => __DIR__ . '/..' . '/barryvdh/laravel-dompdf/src/PDF.php',
