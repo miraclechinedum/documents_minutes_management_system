@@ -24,7 +24,7 @@ use Inertia\Inertia;
 */
 
 Route::get('/', function () {
-    return redirect()->route('dashboard');
+    redirect()->route('login');
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
