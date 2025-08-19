@@ -60,14 +60,14 @@ php artisan key:generate
 ### Step 3: Database Setup
 
 1. **Open phpMyAdmin** (via Laragon)
-2. **Create database**: `document_workflow`
+2. **Create database**: `cac_documents_minutes_db`
 3. **Update .env** with these database credentials:
 
 ```env
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=document_workflow
+DB_DATABASE=cac_documents_minutes_db
 DB_USERNAME=root
 DB_PASSWORD=
 ```
@@ -280,7 +280,7 @@ npm run e2e
 **Database connection issues:**
 - Verify MySQL is running in Laragon
 - Check database credentials in `.env`
-- Ensure `document_workflow` database exists
+- Ensure `cac_documents_minutes_db` database exists
 
 **Permissions errors:**
 - Run `php artisan db:seed --class=RolePermissionSeeder`
