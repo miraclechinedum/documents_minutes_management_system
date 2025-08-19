@@ -1,0 +1,62 @@
+Sample Document 2 Content
+
+PROCUREMENT REQUEST FORM
+
+Request ID: PR-2024-001
+Department: Medical Department  
+Requested by: Dr. Medical Director
+Date: January 15, 2024
+
+ITEM DETAILS:
+1. Medical Equipment - Stethoscopes (Digital)
+   Quantity: 5 units
+   Estimated Cost: $500 per unit
+   
+2. Office Supplies - Paper, Pens, Files
+   Quantity: Various
+   Estimated Cost: $200 total
+
+3. Software License - Medical Records System
+   Quantity: 1 license (annual)
+   Estimated Cost: $2,400
+
+JUSTIFICATION:
+The medical department requires new digital stethoscopes to
+replace aging analog equipment. The enhanced audio quality
+and digital recording capabilities will improve patient
+care and documentation accuracy.
+
+Office supplies are needed for day-to-day operations and
+record keeping. Current stock is running low.
+
+The medical records system license renewal is critical for
+maintaining HIPAA compliance and ensuring secure patient
+data management.
+
+BUDGET INFORMATION:
+Total Estimated Cost: $4,600
+Budget Line: Medical Equipment (60%), Office Supplies (5%), Software (35%)
+Available Budget: $8,000
+Remaining Budget After Purchase: $3,400
+
+APPROVAL WORKFLOW:
+1. Department Head Approval: [ ] Pending
+2. Procurement Review: [ ] Pending  
+3. Finance Approval: [ ] Pending
+4. Final Authorization: [ ] Pending
+
+SPECIAL INSTRUCTIONS:
+- Digital stethoscopes must be FDA approved
+- Software license should include technical support
+- Delivery required by February 1, 2024
+
+This document demonstrates the workflow system's ability to
+handle procurement documents with:
+- Multiple approval stages
+- Financial tracking
+- Compliance requirements
+- Deadline management
+
+The system should support minute addition at each approval
+stage, forwarding between departments, and maintaining a
+complete audit trail of the procurement process.

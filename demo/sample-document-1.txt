@@ -1,0 +1,31 @@
+Sample Document 1 Content
+
+This is a sample text document for demonstration purposes.
+It contains basic text content that can be used for testing 
+the document workflow system.
+
+Document Details:
+- Title: Sample Medical Report
+- Category: Medical
+- Priority: High
+- Content: Patient examination results and recommendations
+
+The system should be able to process this document, extract
+its text content via OCR (when enabled), and allow users to
+add minutes and annotations.
+
+This document can be converted to PDF format for proper testing
+of the document workflow features including:
+- Upload and virus scanning
+- OCR text extraction
+- Minute addition with coordinates
+- Document forwarding and routing
+- PDF export with minutes appendix
+
+Sample medical content:
+Patient presented with symptoms including fatigue and headaches.
+Examination revealed normal vital signs.
+Recommendation: Follow-up in 2 weeks.
+Prescribed medication as per standard protocol.
+
+End of sample document content.

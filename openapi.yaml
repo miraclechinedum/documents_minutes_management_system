@@ -1,0 +1,608 @@
+openapi: 3.0.3
+info:
+  title: Document Workflow API
+  description: API for Document Workflow & Minutes Management System
+  version: 1.0.0
+  contact:
+    name: Document Workflow Support
+    email: support@example.com
+
+servers:
+  - url: http://localhost:8000/api
+    description: Local development server
+
+security:
+  - sanctum: []
+
+paths:
+  /auth/login:
+    post:
+      summary: User login
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Successful login
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Invalid credentials
+
+  /auth/logout:
+    post:
+      summary: User logout
+      tags: [Authentication]
+      responses:
+        '200':
+          description: Successfully logged out
+
+  /documents:
+    get:
+      summary: List documents
+      tags: [Documents]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 12
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [quarantined, scanning, infected, received, in_progress, completed]
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [created_at, title, due_date, priority]
+        - name: direction
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+      responses:
+        '200':
+          description: List of documents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Document'
+                  links:
+                    type: object
+                  meta:
+                    type: object
+
+    post:
+      summary: Upload document
+      tags: [Documents]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [title, file, assigned_to_type, assigned_to_id, priority]
+              properties:
+                title:
+                  type: string
+                reference_number:
+                  type: string
+                description:
+                  type: string
+                file:
+                  type: string
+                  format: binary
+                assigned_to_type:
+                  type: string
+                  enum: [user, department]
+                assigned_to_id:
+                  type: integer
+                priority:
+                  type: string
+                  enum: [low, medium, high]
+                due_date:
+                  type: string
+                  format: date
+      responses:
+        '201':
+          description: Document uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '422':
+          description: Validation errors
+
+  /documents/{id}:
+    get:
+      summary: Get document details
+      tags: [Documents]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Document details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '404':
+          description: Document not found
+        '403':
+          description: Access denied
+
+    put:
+      summary: Update document
+      tags: [Documents]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentUpdate'
+      responses:
+        '200':
+          description: Document updated successfully
+        '422':
+          description: Validation errors
+        '403':
+          description: Access denied
+
+    delete:
+      summary: Delete document
+      tags: [Documents]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Document deleted successfully
+        '403':
+          description: Access denied
+
+  /documents/{id}/download:
+    get:
+      summary: Download original document
+      tags: [Documents]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: File download
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: File not found
+        '403':
+          description: Access denied
+
+  /documents/{id}/export:
+    get:
+      summary: Export document with minutes
+      tags: [Documents]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: mode
+          in: query
+          schema:
+            type: string
+            enum: [appendix, overlay]
+            default: appendix
+      responses:
+        '200':
+          description: Exported PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '403':
+          description: Access denied
+
+  /documents/{id}/minutes:
+    get:
+      summary: Get document minutes
+      tags: [Minutes]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of minutes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Minute'
+
+    post:
+      summary: Add minute to document
+      tags: [Minutes]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [body, visibility]
+              properties:
+                body:
+                  type: string
+                visibility:
+                  type: string
+                  enum: [public, department, internal]
+                page_number:
+                  type: integer
+                pos_x:
+                  type: number
+                  format: float
+                  minimum: 0
+                  maximum: 1
+                pos_y:
+                  type: number
+                  format: float
+                  minimum: 0
+                  maximum: 1
+                forwarded_to_type:
+                  type: string
+                  enum: [user, department]
+                forwarded_to_id:
+                  type: integer
+                attachment:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Minute created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Minute'
+        '422':
+          description: Validation errors
+
+  /minutes/{id}:
+    put:
+      summary: Update minute
+      tags: [Minutes]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body, visibility]
+              properties:
+                body:
+                  type: string
+                visibility:
+                  type: string
+                  enum: [public, department, internal]
+      responses:
+        '200':
+          description: Minute updated successfully
+        '403':
+          description: Access denied
+
+    delete:
+      summary: Delete minute
+      tags: [Minutes]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Minute deleted successfully
+        '403':
+          description: Access denied
+
+  /search:
+    get:
+      summary: Search documents and minutes
+      tags: [Search]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [all, documents, minutes]
+            default: all
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DocumentSearchResult'
+                  minutes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MinuteSearchResult'
+
+components:
+  securitySchemes:
+    sanctum:
+      type: http
+      scheme: bearer
+      bearerFormat: Token
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        department:
+          $ref: '#/components/schemas/Department'
+        roles:
+          type: array
+          items:
+            type: string
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Department:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: string
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Document:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        reference_number:
+          type: string
+        file_name:
+          type: string
+        file_size:
+          type: integer
+        mime_type:
+          type: string
+        pages:
+          type: integer
+        status:
+          type: string
+          enum: [quarantined, scanning, infected, received, in_progress, completed]
+        priority:
+          type: string
+          enum: [low, medium, high]
+        description:
+          type: string
+        due_date:
+          type: string
+          format: date
+        creator:
+          $ref: '#/components/schemas/User'
+        assigned_to_user:
+          $ref: '#/components/schemas/User'
+        assigned_to_department:
+          $ref: '#/components/schemas/Department'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    DocumentUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        reference_number:
+          type: string
+        description:
+          type: string
+        assigned_to_type:
+          type: string
+          enum: [user, department]
+        assigned_to_id:
+          type: integer
+        priority:
+          type: string
+          enum: [low, medium, high]
+        due_date:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [quarantined, scanning, infected, received, in_progress, completed]
+
+    Minute:
+      type: object
+      properties:
+        id:
+          type: integer
+        body:
+          type: string
+        visibility:
+          type: string
+          enum: [public, department, internal]
+        page_number:
+          type: integer
+        pos_x:
+          type: number
+          format: float
+        pos_y:
+          type: number
+          format: float
+        box_style:
+          type: object
+        forwarded_to_type:
+          type: string
+          enum: [user, department]
+        forwarded_to_id:
+          type: integer
+        attachment_path:
+          type: string
+        creator:
+          $ref: '#/components/schemas/User'
+        document:
+          $ref: '#/components/schemas/Document'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    DocumentSearchResult:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        reference_number:
+          type: string
+        url:
+          type: string
+        created_at:
+          type: string
+
+    MinuteSearchResult:
+      type: object
+      properties:
+        id:
+          type: integer
+        body:
+          type: string
+        document_title:
+          type: string
+        url:
+          type: string
+        created_at:
+          type: string
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+        errors:
+          type: object
+        status:
+          type: integer

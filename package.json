@@ -1,0 +1,23 @@
+{
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "vite build",
+        "dev": "vite",
+        "e2e": "playwright test",
+        "e2e:install": "npx playwright install"
+    },
+    "devDependencies": {
+        "@playwright/test": "^1.40.0",
+        "axios": "^1.1.2",
+        "laravel-vite-plugin": "^0.8.0",
+        "vite": "^4.0.0"
+    },
+    "dependencies": {
+        "pdfjs-dist": "^3.11.174",
+        "@tailwindcss/forms": "^0.5.6",
+        "tailwindcss": "^3.3.0",
+        "autoprefixer": "^10.4.16",
+        "postcss": "^8.4.31"
+    }
+}
