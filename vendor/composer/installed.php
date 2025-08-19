@@ -3,7 +3,7 @@
         'name' => 'laravel/document-workflow',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => '40990e2d71702df46dae6cd7cf93edec2c31fb2b',
+        'reference' => '16eaa8afe6e5ebedd349732055eff978fca95d07',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -391,7 +391,7 @@
         'laravel/document-workflow' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => '40990e2d71702df46dae6cd7cf93edec2c31fb2b',
+            'reference' => '16eaa8afe6e5ebedd349732055eff978fca95d07',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
