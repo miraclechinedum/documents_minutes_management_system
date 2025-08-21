@@ -1,25 +1,29 @@
 @extends('layouts.app')
 
 @section('header')
-<div class="flex justify-between items-center">
+<div class="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
     <h2 class="font-semibold text-xl text-gray-800 leading-tight">
         {{ $document->title }}
     </h2>
-    <div class="flex space-x-2">
+    <div class="flex flex-wrap gap-2">
         @can('update', $document)
         <a href="{{ route('documents.edit', $document) }}"
-            class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+            class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200">
             Edit
         </a>
         @endcan
         @can('export', $document)
         <a href="{{ route('documents.export', $document) }}"
-            class="bg-secondary-600 hover:bg-secondary-700 text-white font-bold py-2 px-4 rounded">
+            class="bg-secondary-600 hover:bg-secondary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200">
             Export PDF
         </a>
         @endcan
+        <button onclick="printDocument()"
+            class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200">
+            Print Document
+        </button>
         <a href="{{ route('documents.download', $document) }}"
-            class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
+            class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200">
             Download Original
         </a>
     </div>
@@ -33,9 +37,10 @@
             <!-- Document Details Sidebar -->
             <div class="lg:col-span-1 space-y-6">
                 <!-- Document Information Card -->
-                <div class="bg-white shadow-sm rounded-lg border border-gray-200">
+                <div class="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                     <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
                         <h3 class="text-lg font-semibold text-gray-900">Document Details</h3>
+                        <p class="mt-1 text-sm text-gray-600">Basic information about this document.</p>
                     </div>
                     <div class="p-6">
                         <dl class="space-y-4">
@@ -43,7 +48,7 @@
                                 <dt class="text-sm font-medium text-gray-500">Status</dt>
                                 <dd>
                                     <span
-                                        class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium {{ $document->status_color }}">
+                                        class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium {{ $document->status_color ?? 'bg-gray-100 text-gray-800' }}">
                                         {{ ucfirst(str_replace('_', ' ', $document->status)) }}
                                     </span>
                                 </dd>
@@ -60,7 +65,7 @@
                                 <dt class="text-sm font-medium text-gray-500">Priority</dt>
                                 <dd>
                                     <span
-                                        class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium {{ $document->priority_color }}">
+                                        class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium {{ $document->priority_color ?? 'bg-gray-100 text-gray-800' }}">
                                         {{ ucfirst($document->priority) }}
                                     </span>
                                 </dd>
@@ -124,9 +129,10 @@
 
                 <!-- Routing History -->
                 @if($document->routes->count() > 0)
-                <div class="bg-white shadow-sm rounded-lg border border-gray-200">
+                <div class="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                     <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
                         <h3 class="text-lg font-semibold text-gray-900">Routing History</h3>
+                        <p class="mt-1 text-sm text-gray-600">Document forwarding and routing history.</p>
                     </div>
                     <div class="p-6">
                         <div class="flow-root">
@@ -179,9 +185,10 @@
             <!-- Main Content Area -->
             <div class="lg:col-span-2 space-y-6">
                 <!-- Document Viewer -->
-                <div class="bg-white shadow-sm rounded-lg border border-gray-200">
+                <div class="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                     <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
                         <h3 class="text-lg font-semibold text-gray-900">Document Viewer</h3>
+                        <p class="mt-1 text-sm text-gray-600">View and interact with the document content.</p>
                     </div>
                     <div class="p-6">
                         @if($document->status === 'received' || $document->status === 'in_progress' || $document->status
@@ -232,10 +239,14 @@
                 </div>
 
                 <!-- Minutes Section -->
-                <div class="bg-white shadow-sm rounded-lg border border-gray-200">
+                <div class="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                     <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
                         <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-semibold text-gray-900">Minutes & Annotations</h3>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Minutes & Annotations</h3>
+                                <p class="mt-1 text-sm text-gray-600">Comments and notes associated with this document.
+                                </p>
+                            </div>
                             @can('create', App\Models\Minute::class)
                             <button onclick="openMinuteModal()"
                                 class="bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200">
@@ -342,8 +353,9 @@
 <div id="minute-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
     <div class="flex items-center justify-center min-h-screen p-4">
         <div class="bg-white rounded-lg shadow-xl max-w-lg w-full">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h3 class="text-lg font-medium text-gray-900" id="modal-title">Add Minute</h3>
+            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-lg font-semibold text-gray-900" id="modal-title">Add Minute</h3>
+                <p class="mt-1 text-sm text-gray-600">Add a comment or note to this document.</p>
             </div>
             <form id="minute-form" class="p-6">
                 @csrf
@@ -354,15 +366,16 @@
 
                 <div class="space-y-4">
                     <div>
-                        <label for="body" class="block text-sm font-medium text-gray-700 mb-2">Message</label>
+                        <label for="body" class="block text-sm font-medium text-gray-700 mb-2">Message *</label>
                         <textarea id="body" name="body" rows="4" required
                             class="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-300 focus:ring focus:ring-primary-200 focus:ring-opacity-50"
                             placeholder="Enter your minute or comment..."></textarea>
                     </div>
 
                     <div>
-                        <label for="visibility" class="block text-sm font-medium text-gray-700 mb-2">Visibility</label>
-                        <select id="visibility" name="visibility"
+                        <label for="visibility" class="block text-sm font-medium text-gray-700 mb-2">Visibility
+                            *</label>
+                        <select id="visibility" name="visibility" required
                             class="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-300 focus:ring focus:ring-primary-200 focus:ring-opacity-50">
                             <option value="public">Public - Visible to all who can view document</option>
                             <option value="department">Department Only - Visible to department members</option>
@@ -392,7 +405,7 @@
                     </div>
                 </div>
 
-                <div class="mt-6 flex justify-end space-x-3">
+                <div class="mt-6 flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3">
                     <button type="button" onclick="closeMinuteModal()"
                         class="bg-gray-300 hover:bg-gray-400 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors duration-200">
                         Cancel
@@ -410,6 +423,100 @@
 <script>
     let users = @json(\App\Models\User::where('is_active', true)->get(['id', 'name']));
     let departments = @json(\App\Models\Department::where('is_active', true)->get(['id', 'name']));
+
+    function printDocument() {
+        window.open('{{ route("documents.print", $document) }}', '_blank', 'width=800,height=600');
+    }
+
+    // Handle forwarding type change
+    document.addEventListener('DOMContentLoaded', function() {
+        const forwardedToType = document.getElementById('forwarded_to_type');
+        const forwardedToId = document.getElementById('forwarded_to_id');
+        
+        forwardedToType.addEventListener('change', function() {
+            const type = this.value;
+            
+            // Clear existing options
+            forwardedToId.innerHTML = '<option value="">Select...</option>';
+            
+            if (type === 'user') {
+                // Populate with users
+                users.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.id;
+                    option.textContent = user.name;
+                    forwardedToId.appendChild(option);
+                });
+            } else if (type === 'department') {
+                // Populate with departments
+                departments.forEach(department => {
+                    const option = document.createElement('option');
+                    option.value = department.id;
+                    option.textContent = department.name;
+                    forwardedToId.appendChild(option);
+                });
+            }
+        });
+    });
+
+    // Modal functions
+    function openMinuteModal() {
+        document.getElementById('minute-modal').classList.remove('hidden');
+        document.getElementById('modal-title').textContent = 'Add Minute';
+        document.getElementById('minute-form').reset();
+        document.getElementById('minute-id').value = '';
+    }
+
+    function closeMinuteModal() {
+        document.getElementById('minute-modal').classList.add('hidden');
+    }
+
+    function editMinute(minuteId) {
+        // Implementation for editing minute
+        console.log('Edit minute:', minuteId);
+    }
+
+    function deleteMinute(minuteId) {
+        if (confirm('Are you sure you want to delete this minute?')) {
+            // Implementation for deleting minute
+            console.log('Delete minute:', minuteId);
+        }
+    }
+
+    // Handle form submission
+    document.getElementById('minute-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const minuteId = document.getElementById('minute-id').value;
+        
+        const url = minuteId ? 
+            `/minutes/${minuteId}` : 
+            `/documents/{{ $document->id }}/minutes`;
+        
+        const method = minuteId ? 'PUT' : 'POST';
+        
+        fetch(url, {
+            method: method,
+            body: formData,
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                closeMinuteModal();
+                location.reload(); // Refresh to show new minute
+            } else {
+                alert('Error saving minute');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error saving minute');
+        });
+    });
 </script>
 @vite(['resources/js/document-viewer.js'])
 @endsection

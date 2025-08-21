@@ -20,10 +20,10 @@ class DocumentController extends Controller
 
         // Apply filters based on user permissions and selections
         if (!Auth::user()->hasRole('admin')) {
-            $query->where(function($q) {
+            $query->where(function ($q) {
                 $q->where('created_by', Auth::id())
-                  ->orWhere('assigned_to_user_id', Auth::id())
-                  ->orWhere('assigned_to_department_id', Auth::user()->department_id);
+                    ->orWhere('assigned_to_user_id', Auth::id())
+                    ->orWhere('assigned_to_department_id', Auth::user()->department_id);
             });
         }
 
@@ -44,11 +44,11 @@ class DocumentController extends Controller
         // Search
         if ($request->filled('search')) {
             $searchTerm = $request->search;
-            $query->where(function($q) use ($searchTerm) {
+            $query->where(function ($q) use ($searchTerm) {
                 $q->where('title', 'like', "%{$searchTerm}%")
-                  ->orWhere('reference_number', 'like', "%{$searchTerm}%")
-                  ->orWhere('file_name', 'like', "%{$searchTerm}%")
-                  ->orWhere('ocr_text', 'like', "%{$searchTerm}%");
+                    ->orWhere('reference_number', 'like', "%{$searchTerm}%")
+                    ->orWhere('file_name', 'like', "%{$searchTerm}%")
+                    ->orWhere('ocr_text', 'like', "%{$searchTerm}%");
             });
         }
 
@@ -74,7 +74,7 @@ class DocumentController extends Controller
     public function create()
     {
         $this->authorize('create', Document::class);
-        
+
         $departments = Department::where('is_active', true)->get();
         $users = User::where('is_active', true)->get();
 
@@ -104,13 +104,13 @@ class DocumentController extends Controller
         $fileName = $file->getClientOriginalName();
         $fileExtension = $file->getClientOriginalExtension();
         $storedFileName = Str::uuid() . '.' . $fileExtension;
-        
+
         // Store file
         $filePath = $file->storeAs('documents', $storedFileName, 'local');
-        
+
         // Calculate checksum
         $checksum = hash_file('sha256', Storage::path($filePath));
-        
+
         // Get pages count for PDF
         $pages = null;
         if ($file->getMimeType() === 'application/pdf') {
@@ -120,7 +120,7 @@ class DocumentController extends Controller
         // Create document record
         $assignedToUserId = null;
         $assignedToDepartmentId = null;
-        
+
         if ($request->assigned_to_type === 'user') {
             $assignedToUserId = $request->assigned_to_id;
         } else {
@@ -163,13 +163,13 @@ class DocumentController extends Controller
     public function show(Document $document)
     {
         $this->authorize('view', $document);
-        
+
         $document->load(['creator', 'assignedToUser', 'assignedToDepartment', 'minutes.creator', 'routes.fromUser', 'routes.toUser', 'routes.toDepartment']);
-        
-        $minutes = $document->minutes()->whereHas('document', function($query) {
+
+        $minutes = $document->minutes()->whereHas('document', function ($query) {
             // Only show minutes the user can view
             return $query;
-        })->get()->filter(function($minute) {
+        })->get()->filter(function ($minute) {
             return $minute->canViewBy(Auth::user());
         });
 
@@ -179,7 +179,7 @@ class DocumentController extends Controller
     public function edit(Document $document)
     {
         $this->authorize('update', $document);
-        
+
         $departments = Department::where('is_active', true)->get();
         $users = User::where('is_active', true)->get();
 
@@ -207,7 +207,7 @@ class DocumentController extends Controller
 
         $assignedToUserId = null;
         $assignedToDepartmentId = null;
-        
+
         if ($request->assigned_to_type === 'user') {
             $assignedToUserId = $request->assigned_to_id;
         } else {
@@ -236,7 +236,7 @@ class DocumentController extends Controller
         if (Storage::exists($document->file_path)) {
             Storage::delete($document->file_path);
         }
-        
+
         // Delete thumbnail
         if ($document->thumbnail_path && Storage::exists($document->thumbnail_path)) {
             Storage::delete($document->thumbnail_path);
@@ -254,7 +254,7 @@ class DocumentController extends Controller
     public function download(Document $document)
     {
         $this->authorize('view', $document);
-        
+
         if (!Storage::exists($document->file_path)) {
             abort(404, 'File not found');
         }
@@ -269,9 +269,9 @@ class DocumentController extends Controller
     public function export(Document $document, Request $request)
     {
         $this->authorize('export', $document);
-        
+
         $mode = $request->get('mode', 'appendix'); // 'appendix' or 'overlay'
-        
+
         activity()
             ->performedOn($document)
             ->log('document.exported', ['mode' => $mode]);
@@ -279,8 +279,27 @@ class DocumentController extends Controller
         if ($mode === 'overlay') {
             return $this->exportWithOverlay($document);
         }
-        
+
         return $this->exportWithAppendix($document);
+    }
+
+    public function print(Document $document)
+    {
+        $this->authorize('view', $document);
+
+        $document->load(['creator', 'assignedToUser', 'assignedToDepartment', 'minutes.creator']);
+
+        $minutes = $document->minutes()->whereHas('document', function ($query) {
+            return $query;
+        })->get()->filter(function ($minute) {
+            return $minute->canViewBy(Auth::user());
+        });
+
+        activity()
+            ->performedOn($document)
+            ->log('document.print_viewed');
+
+        return view('documents.print', compact('document', 'minutes'));
     }
 
     private function getPdfPageCount(string $filePath): ?int
@@ -305,18 +324,15 @@ class DocumentController extends Controller
 
     private function exportWithAppendix(Document $document)
     {
-        $pdf = app('dompdf.wrapper');
-        
-        $minutes = $document->minutes()->whereHas('document', function($query) {
+        $document->load(['creator', 'assignedToUser', 'assignedToDepartment']);
+
+        $minutes = $document->minutes()->whereHas('document', function ($query) {
             return $query;
-        })->get()->filter(function($minute) {
+        })->get()->filter(function ($minute) {
             return $minute->canViewBy(Auth::user());
         });
-        
-        $html = view('documents.export-appendix', compact('document', 'minutes'))->render();
-        $pdf->loadHTML($html);
-        
-        return $pdf->download($document->title . '_with_minutes.pdf');
+
+        return view('documents.export-appendix', compact('document', 'minutes'));
     }
 
     private function exportWithOverlay(Document $document)

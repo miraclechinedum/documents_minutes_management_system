@@ -46,6 +46,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('documents', DocumentController::class);
     Route::get('/documents/{document}/download', [DocumentController::class, 'download'])->name('documents.download');
     Route::get('/documents/{document}/export', [DocumentController::class, 'export'])->name('documents.export');
+    Route::get('/documents/{document}/print', [DocumentController::class, 'print'])->name('documents.print');
 
     // Minute routes
     Route::post('/documents/{document}/minutes', [MinuteController::class, 'store'])->name('minutes.store');
