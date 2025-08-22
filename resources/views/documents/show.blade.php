@@ -1,10 +1,17 @@
 @extends('layouts.app')
 
-@section('header')
+{{-- @section('header') --}}
 <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
     <h2 class="font-semibold text-xl text-gray-800 leading-tight">
         {{ $document->title }}
     </h2>
+
+    {{-- Debug: Check if user has permissions --}}
+    <div class="text-sm text-gray-500">
+        Can update: {{ Auth::user()->can('update', $document) ? 'Yes' : 'No' }} |
+        Can export: {{ Auth::user()->can('export', $document) ? 'Yes' : 'No' }}
+    </div>
+
     <div class="flex flex-wrap gap-2">
         @can('update', $document)
         <a href="{{ route('documents.edit', $document) }}"
@@ -28,7 +35,7 @@
         </a>
     </div>
 </div>
-@endsection
+{{-- @endsection --}}
 
 @section('content')
 <div class="py-8">
@@ -128,7 +135,7 @@
                 </div>
 
                 <!-- Routing History -->
-                @if($document->routes->count() > 0)
+                {{-- @if($document->routes->count() > 0) --}}
                 <div class="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
                     <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
                         <h3 class="text-lg font-semibold text-gray-900">Routing History</h3>
@@ -179,7 +186,7 @@
                         </div>
                     </div>
                 </div>
-                @endif
+                {{-- @endif --}}
             </div>
 
             <!-- Main Content Area -->

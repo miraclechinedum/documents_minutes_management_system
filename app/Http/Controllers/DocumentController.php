@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use setasign\Fpdi\Fpdi;
 
 class DocumentController extends Controller
 {
@@ -266,38 +267,20 @@ class DocumentController extends Controller
         return Storage::download($document->file_path, $document->file_name);
     }
 
-    public function export(Document $document, Request $request)
-    {
-        $this->authorize('export', $document);
-
-        $mode = $request->get('mode', 'appendix'); // 'appendix' or 'overlay'
-
-        activity()
-            ->performedOn($document)
-            ->log('document.exported', ['mode' => $mode]);
-
-        if ($mode === 'overlay') {
-            return $this->exportWithOverlay($document);
-        }
-
-        return $this->exportWithAppendix($document);
-    }
-
     public function print(Document $document)
     {
         $this->authorize('view', $document);
 
-        $document->load(['creator', 'assignedToUser', 'assignedToDepartment', 'minutes.creator']);
+        $document->load(['creator', 'assignedToUser', 'assignedToDepartment']);
 
-        $minutes = $document->minutes()->whereHas('document', function ($query) {
-            return $query;
-        })->get()->filter(function ($minute) {
+        // Get minutes that the user can view
+        $minutes = $document->minutes()->with('creator')->get()->filter(function ($minute) {
             return $minute->canViewBy(Auth::user());
-        });
+        })->sortBy('created_at');
 
         activity()
             ->performedOn($document)
-            ->log('document.print_viewed');
+            ->log('document.printed');
 
         return view('documents.print', compact('document', 'minutes'));
     }
@@ -322,6 +305,39 @@ class DocumentController extends Controller
         $document->update(['thumbnail_path' => $thumbnailPath]);
     }
 
+    public function preview(Document $document)
+    {
+        $this->authorize('view', $document);
+
+        if (!Storage::exists($document->file_path)) {
+            abort(404, 'File not found');
+        }
+
+        $file = Storage::get($document->file_path);
+        $mime = Storage::mimeType($document->file_path);
+
+        return response($file)
+            ->header('Content-Type', $mime)
+            ->header('Content-Disposition', 'inline; filename="' . $document->file_name . '"');
+    }
+
+    public function export(Document $document, Request $request)
+    {
+        $this->authorize('export', $document);
+
+        $mode = $request->get('mode', 'appendix'); // 'appendix' or 'overlay'
+
+        activity()
+            ->performedOn($document)
+            ->log('document.exported', ['mode' => $mode]);
+
+        if ($mode === 'overlay') {
+            return $this->exportWithOverlay($document);
+        }
+
+        return $this->exportWithAppendix($document);
+    }
+
     private function exportWithAppendix(Document $document)
     {
         $document->load(['creator', 'assignedToUser', 'assignedToDepartment']);
@@ -332,7 +348,151 @@ class DocumentController extends Controller
             return $minute->canViewBy(Auth::user());
         });
 
-        return view('documents.export-appendix', compact('document', 'minutes'));
+        // Create a new PDF that combines the original document and minutes
+        if ($document->mime_type === 'application/pdf') {
+            return $this->combinePdfWithMinutes($document, $minutes);
+        }
+        // For images, convert to PDF and add minutes
+        else if (in_array($document->mime_type, ['image/jpeg', 'image/png', 'image/tiff'])) {
+            return $this->convertImageToPdfWithMinutes($document, $minutes);
+        }
+        // For other file types, use the existing method
+        else {
+            $pdf = app('dompdf.wrapper');
+            $html = view('documents.pdf-export', compact('document', 'minutes'))->render();
+            $pdf->loadHTML($html);
+            $pdf->setPaper('A4', 'portrait');
+            $pdf->getDomPDF()->getOptions()->set('isRemoteEnabled', true);
+
+            $filename = Str::slug($document->title) . '_with_minutes.pdf';
+            return $pdf->download($filename);
+        }
+    }
+
+    private function combinePdfWithMinutes($document, $minutes)
+    {
+        try {
+            // Initialize FPDI
+            $pdf = new Fpdi();
+
+            // Get page count of original document
+            $pageCount = $pdf->setSourceFile(Storage::path($document->file_path));
+
+            // Import each page from the original document
+            for ($pageNo = 1; $pageNo <= $pageCount; $pageNo++) {
+                $templateId = $pdf->importPage($pageNo);
+                $size = $pdf->getTemplateSize($templateId);
+
+                // Add a page with the appropriate orientation
+                $orientation = $size['width'] > $size['height'] ? 'L' : 'P';
+                $pdf->AddPage($orientation, array($size['width'], $size['height']));
+                $pdf->useTemplate($templateId);
+            }
+
+            // Add minutes as new pages
+            if ($minutes->count() > 0) {
+                $pdf->AddPage();
+                $pdf->SetFont('Arial', 'B', 16);
+                $pdf->Cell(0, 10, 'Minutes and Annotations', 0, 1, 'C');
+                $pdf->Ln(10);
+
+                $pdf->SetFont('Arial', '', 12);
+                foreach ($minutes as $minute) {
+                    $pdf->SetFont('', 'B');
+                    $pdf->Cell(0, 10, "{$minute->creator->name} - " . $minute->created_at->format('F j, Y \a\t g:i A'), 0, 1);
+
+                    $pdf->SetFont('', '');
+                    // Handle multi-line text
+                    $pdf->MultiCell(0, 8, $minute->body);
+                    $pdf->Ln(5);
+                }
+            }
+
+            $filename = Str::slug($document->title) . '_with_minutes.pdf';
+
+            return response($pdf->Output('S'), 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            ]);
+        } catch (\Exception $e) {
+            // Fallback to DomPDF if FPDI fails
+            $pdf = app('dompdf.wrapper');
+            $html = view('documents.pdf-export', compact('document', 'minutes'))->render();
+            $pdf->loadHTML($html);
+            $pdf->setPaper('A4', 'portrait');
+            $pdf->getDomPDF()->getOptions()->set('isRemoteEnabled', true);
+
+            $filename = Str::slug($document->title) . '_with_minutes.pdf';
+            return $pdf->download($filename);
+        }
+    }
+
+    private function convertImageToPdfWithMinutes($document, $minutes)
+    {
+        try {
+            $pdf = new Fpdi();
+
+            // Add the image as a page
+            $pdf->AddPage();
+            $imagePath = Storage::path($document->file_path);
+
+            // Get image dimensions
+            list($width, $height) = getimagesize($imagePath);
+
+            // Calculate aspect ratio to fit on page (A4 size in mm)
+            $pageWidth = 210;
+            $pageHeight = 297;
+
+            // Convert pixels to mm (assuming 72 DPI)
+            $widthInMm = ($width / 72) * 25.4;
+            $heightInMm = ($height / 72) * 25.4;
+
+            $ratio = min($pageWidth / $widthInMm, $pageHeight / $heightInMm);
+            $widthInMm *= $ratio;
+            $heightInMm *= $ratio;
+
+            // Center image on page
+            $x = ($pageWidth - $widthInMm) / 2;
+            $y = ($pageHeight - $heightInMm) / 2;
+
+            $pdf->Image($imagePath, $x, $y, $widthInMm, $heightInMm);
+
+            // Add minutes as additional pages
+            if ($minutes->count() > 0) {
+                $pdf->AddPage();
+                $pdf->SetFont('Arial', 'B', 16);
+                $pdf->Cell(0, 10, 'Minutes and Annotations', 0, 1, 'C');
+                $pdf->Ln(10);
+
+                $pdf->SetFont('Arial', '', 12);
+                foreach ($minutes as $minute) {
+                    $pdf->SetFont('', 'B');
+                    $pdf->Cell(0, 10, "{$minute->creator->name} - " . $minute->created_at->format('F j, Y \a\t g:i A'), 0, 1);
+
+                    $pdf->SetFont('', '');
+                    // Handle multi-line text
+                    $pdf->MultiCell(0, 8, $minute->body);
+                    $pdf->Ln(5);
+                }
+            }
+
+            $filename = Str::slug($document->title) . '_with_minutes.pdf';
+
+            return response($pdf->Output('S'), 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            ]);
+        } catch (\Exception $e) {
+            // Fallback to DomPDF if FPDI fails
+            $pdf = app('dompdf.wrapper');
+            $html = view('documents.pdf-export', compact('document', 'minutes'))->render();
+            $pdf->loadHTML($html);
+            $pdf->setPaper('A4', 'portrait');
+            $pdf->getDomPDF()->getOptions()->set('isRemoteEnabled', true);
+
+            $filename = Str::slug($document->title) . '_with_minutes.pdf';
+            return $pdf->download($filename);
+        }
     }
 
     private function exportWithOverlay(Document $document)

@@ -1,322 +1,461 @@
-@extends('layouts.app')
+<!DOCTYPE html>
+<html lang="en">
 
-@section('header')
-<div class="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
-    <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-        Print: {{ $document->title }}
-    </h2>
-    <div class="flex space-x-2">
-        <button onclick="window.print()"
-            class="bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200">
-            🖨️ Print Document
-        </button>
-        <button onclick="window.close()"
-            class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200">
-            ✕ Close
-        </button>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ $document->title }} - Print View</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Times New Roman', serif;
+            font-size: 12pt;
+            line-height: 1.6;
+            color: #000;
+            background: white;
+            padding: 20px;
+        }
+
+        .print-header {
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+
+        .print-header h1 {
+            font-size: 18pt;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .print-header .subtitle {
+            font-size: 14pt;
+            color: #666;
+        }
+
+        .document-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+        }
+
+        .info-group {
+            margin-bottom: 10px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            display: inline-block;
+            width: 120px;
+        }
+
+        .info-value {
+            display: inline-block;
+        }
+
+        .status-badge {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10pt;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .status-received {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .status-in-progress {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .status-completed {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .status-quarantined {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .priority-high {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .priority-medium {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .priority-low {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .document-content {
+            margin-bottom: 40px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            min-height: 200px;
+            background-color: #fafafa;
+            text-align: center;
+            color: #666;
+        }
+
+        .minutes-section {
+            margin-top: 40px;
+        }
+
+        .minutes-header {
+            font-size: 16pt;
+            font-weight: bold;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #000;
+        }
+
+        .minute-item {
+            margin-bottom: 25px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-left: 4px solid #007cba;
+            background-color: #f8f9fa;
+            page-break-inside: avoid;
+        }
+
+        .minute-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 11pt;
+        }
+
+        .minute-author {
+            font-weight: bold;
+            color: #007cba;
+        }
+
+        .minute-date {
+            color: #666;
+            font-style: italic;
+        }
+
+        .minute-visibility {
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-size: 9pt;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .visibility-public {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .visibility-department {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .visibility-internal {
+            background-color: #e2e3e5;
+            color: #383d41;
+        }
+
+        .minute-body {
+            margin-top: 10px;
+            line-height: 1.8;
+            text-align: justify;
+        }
+
+        .minute-overlay-info {
+            margin-top: 8px;
+            font-size: 10pt;
+            color: #666;
+            font-style: italic;
+        }
+
+        .minute-forwarded {
+            margin-top: 10px;
+            padding: 8px;
+            background-color: #e3f2fd;
+            border-left: 3px solid #2196f3;
+            font-size: 10pt;
+        }
+
+        .no-minutes {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 40px;
+        }
+
+        .print-footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ccc;
+            text-align: center;
+            font-size: 10pt;
+            color: #666;
+        }
+
+        /* Print-specific styles */
+        @media print {
+            body {
+                padding: 0;
+                font-size: 11pt;
+            }
+
+            .print-header {
+                margin-bottom: 20px;
+            }
+
+            .minute-item {
+                page-break-inside: avoid;
+                margin-bottom: 15px;
+            }
+
+            .minutes-section {
+                page-break-before: auto;
+            }
+        }
+
+        @page {
+            margin: 1in;
+            size: A4;
+        }
+
+        .document-preview {
+            text-align: center;
+            margin: 20px 0;
+            border: 1px solid #ccc;
+            min-height: 500px;
+        }
+        
+        .document-preview iframe {
+            width: 100%;
+            height: 500px;
+            border: none;
+        }
+        
+        .document-alternative {
+            padding: 30px;
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            border: 2px dashed #ccc;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Print Header -->
+    <div class="print-header">
+        <h1>{{ $document->title }}</h1>
+        <div class="subtitle">Document with Minutes - {{ now()->format('F j, Y') }}</div>
     </div>
-</div>
-@endsection
 
-@section('content')
-<div class="py-8 print:py-4">
-    <div class="max-w-4xl mx-auto sm:px-6 lg:px-8 print:px-0">
-        <div
-            class="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200 print:shadow-none print:border-0">
-            <!-- Print Header -->
-            <div
-                class="px-6 py-4 border-b border-gray-200 bg-gray-50 print:bg-white print:border-b-2 print:border-black">
-                <div class="text-center">
-                    <h1 class="text-2xl font-bold text-gray-900 mb-2">{{ $document->title }}</h1>
-                    <p class="text-sm text-gray-600">Document with Minutes - Print Version</p>
-                </div>
+    <!-- Document Information -->
+    <div class="document-info">
+        <div>
+            <div class="info-group">
+                <span class="info-label">Status:</span>
+                <span class="info-value">
+                    <span class="status-badge status-{{ str_replace('_', '-', $document->status) }}">
+                        {{ ucfirst(str_replace('_', ' ', $document->status)) }}
+                    </span>
+                </span>
             </div>
 
-            <div class="p-8 print:p-4">
-                <!-- Document Details Section -->
-                <div class="space-y-6">
-                    <div class="border-b border-gray-200 pb-4 print:border-b print:border-black">
-                        <h3 class="text-lg font-semibold text-gray-900">Document Details</h3>
-                    </div>
+            @if($document->reference_number)
+            <div class="info-group">
+                <span class="info-label">Reference:</span>
+                <span class="info-value">{{ $document->reference_number }}</span>
+            </div>
+            @endif
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 print:gap-4">
-                        <div class="space-y-3">
-                            <div
-                                class="flex justify-between py-2 border-b border-gray-100 print:border-dotted print:border-gray-400">
-                                <span class="text-sm font-medium text-gray-700">Status:</span>
-                                <span class="text-sm text-gray-900">{{ ucfirst(str_replace('_', ' ', $document->status))
-                                    }}</span>
-                            </div>
+            <div class="info-group">
+                <span class="info-label">Priority:</span>
+                <span class="info-value">
+                    <span class="status-badge priority-{{ $document->priority }}">
+                        {{ ucfirst($document->priority) }}
+                    </span>
+                </span>
+            </div>
 
-                            @if($document->reference_number)
-                            <div
-                                class="flex justify-between py-2 border-b border-gray-100 print:border-dotted print:border-gray-400">
-                                <span class="text-sm font-medium text-gray-700">Reference:</span>
-                                <span class="text-sm text-gray-900">{{ $document->reference_number }}</span>
-                            </div>
-                            @endif
+            <div class="info-group">
+                <span class="info-label">Created By:</span>
+                <span class="info-value">{{ $document->creator->name }}</span>
+            </div>
+        </div>
 
-                            <div
-                                class="flex justify-between py-2 border-b border-gray-100 print:border-dotted print:border-gray-400">
-                                <span class="text-sm font-medium text-gray-700">Priority:</span>
-                                <span class="text-sm text-gray-900">{{ ucfirst($document->priority) }}</span>
-                            </div>
+        <div>
+            <div class="info-group">
+                <span class="info-label">Created On:</span>
+                <span class="info-value">{{ $document->created_at->format('F j, Y \a\t g:i A') }}</span>
+            </div>
 
-                            <div
-                                class="flex justify-between py-2 border-b border-gray-100 print:border-dotted print:border-gray-400">
-                                <span class="text-sm font-medium text-gray-700">Created By:</span>
-                                <span class="text-sm text-gray-900">{{ $document->creator->name }}</span>
-                            </div>
-                        </div>
+            @if($document->getCurrentAssignee())
+            <div class="info-group">
+                <span class="info-label">Assigned To:</span>
+                <span class="info-value">{{ $document->getCurrentAssignee() }}</span>
+            </div>
+            @endif
 
-                        <div class="space-y-3">
-                            <div
-                                class="flex justify-between py-2 border-b border-gray-100 print:border-dotted print:border-gray-400">
-                                <span class="text-sm font-medium text-gray-700">Created On:</span>
-                                <span class="text-sm text-gray-900">{{ $document->created_at->format('M j, Y g:i A')
-                                    }}</span>
-                            </div>
+            @if($document->due_date)
+            <div class="info-group">
+                <span class="info-label">Due Date:</span>
+                <span class="info-value" style="color: #d32f2f; font-weight: bold;">{{ $document->due_date->format('F j,
+                    Y') }}</span>
+            </div>
+            @endif
 
-                            @if($document->getCurrentAssignee())
-                            <div
-                                class="flex justify-between py-2 border-b border-gray-100 print:border-dotted print:border-gray-400">
-                                <span class="text-sm font-medium text-gray-700">Assigned To:</span>
-                                <span class="text-sm text-gray-900">{{ $document->getCurrentAssignee() }}</span>
-                            </div>
-                            @endif
-
-                            @if($document->due_date)
-                            <div
-                                class="flex justify-between py-2 border-b border-gray-100 print:border-dotted print:border-gray-400">
-                                <span class="text-sm font-medium text-gray-700">Due Date:</span>
-                                <span class="text-sm text-gray-900">{{ $document->due_date->format('M j, Y') }}</span>
-                            </div>
-                            @endif
-
-                            <div
-                                class="flex justify-between py-2 border-b border-gray-100 print:border-dotted print:border-gray-400">
-                                <span class="text-sm font-medium text-gray-700">File Name:</span>
-                                <span class="text-sm text-gray-900">{{ $document->file_name }}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    @if($document->description)
-                    <div class="mt-6 print:mt-4">
-                        <div class="text-sm font-medium text-gray-700 mb-2">Description:</div>
-                        <div class="bg-gray-50 rounded-lg p-4 print:bg-gray-100 print:border print:border-gray-300">
-                            <p class="text-sm text-gray-900 leading-relaxed">{{ $document->description }}</p>
-                        </div>
-                    </div>
-                    @endif
-                </div>
-
-                <!-- Minutes Section -->
-                <div class="space-y-6 mt-8 print:mt-6">
-                    <div class="border-b border-gray-200 pb-4 print:border-b print:border-black">
-                        <h3 class="text-lg font-semibold text-gray-900 text-center print:text-xl">
-                            MINUTES & ANNOTATIONS ({{ $minutes->count() }} Total)
-                        </h3>
-                    </div>
-
-                    @forelse($minutes as $minute)
-                    <div
-                        class="bg-white border border-gray-200 rounded-lg p-6 mb-4 print:border print:border-gray-400 print:mb-3 print:p-4 print:break-inside-avoid">
-                        <div class="flex justify-between items-start mb-4 print:mb-2">
-                            <div class="flex-1">
-                                <div class="font-medium text-gray-900 print:font-bold">{{ $minute->creator->name }}
-                                </div>
-                                <div class="text-sm text-gray-500 print:text-xs">{{ $minute->created_at->format('M j, Y
-                                    g:i A') }}</div>
-                            </div>
-                            <div class="text-right">
-                                <span
-                                    class="inline-block px-2 py-1 text-xs font-medium border border-gray-300 rounded print:border-gray-600">
-                                    {{ ucfirst($minute->visibility) }}
-                                </span>
-                            </div>
-                        </div>
-
-                        <div
-                            class="bg-gray-50 rounded-lg p-4 mb-3 print:bg-gray-100 print:border print:border-gray-300 print:mb-2">
-                            <div class="text-gray-900 leading-relaxed print:text-sm">{{ $minute->body }}</div>
-                        </div>
-
-                        @if($minute->hasOverlay())
-                        <div class="text-xs text-gray-600 italic print:text-xs">
-                            📍 Positioned on page {{ $minute->page_number }} of the document
-                        </div>
-                        @endif
-
-                        @if($minute->getForwardedToName())
-                        <div
-                            class="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2 print:bg-gray-100 print:border-gray-400 print:text-xs">
-                            <div class="text-sm text-blue-700 italic print:text-gray-700">
-                                ➤ Forwarded to {{ $minute->getForwardedToName() }}
-                            </div>
-                        </div>
-                        @endif
-                    </div>
-                    @empty
-                    <div
-                        class="text-center py-12 bg-gray-50 rounded-lg print:py-8 print:bg-gray-100 print:border print:border-gray-300">
-                        <p class="text-gray-600 italic">No minutes have been added to this document.</p>
-                    </div>
-                    @endforelse
-                </div>
-
-                <!-- Print Footer -->
-                <div
-                    class="mt-8 pt-6 border-t border-gray-200 text-center print:mt-6 print:pt-4 print:border-t print:border-gray-400">
-                    <p class="text-sm text-gray-500 print:text-xs">Printed on {{ now()->format('M j, Y \a\t g:i A') }}
-                    </p>
-                    <p class="text-sm text-gray-500 print:text-xs">{{ config('app.name') }} - Document Management System
-                    </p>
-                </div>
+            <div class="info-group">
+                <span class="info-label">File:</span>
+                <span class="info-value">{{ $document->file_name }} ({{ number_format($document->file_size / 1024, 1) }}
+                    KB)</span>
             </div>
         </div>
     </div>
-</div>
 
-<style>
-    @media print {
-        body {
-            margin: 0;
-            padding: 0;
-            background: white;
-        }
+    @if($document->description)
+    <div style="margin-bottom: 30px; padding: 15px; border: 1px solid #ddd; background-color: #f9f9f9;">
+        <strong>Description:</strong><br>
+        {{ $document->description }}
+    </div>
+    @endif
 
-        .print\:py-4 {
-            padding-top: 1rem;
-            padding-bottom: 1rem;
-        }
+    <!-- Original Document Content -->
+    <div class="document-content" style="margin-bottom: 30px;">
+        @if($document->mime_type === 'application/pdf')
+        <!-- For PDF files -->
+        <div style="text-align: center; margin: 20px 0; page-break-inside: avoid;">
+            <div style="border: 2px solid #333; padding: 10px; background-color: #f9f9f9;">
+                <p style="margin: 0; font-weight: bold;">📄 PDF Document: {{ $document->file_name }}</p>
+                <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">
+                    Original document content - {{ number_format($document->file_size / 1024, 1) }} KB
+                    @if($document->pages) • {{ $document->pages }} page(s) @endif
+                </p>
+            </div>
+            <!-- Embed PDF for browsers that support it -->
+            <iframe src="{{ route('documents.preview', $document) }}" width="100%" height="600px"
+                style="border: 1px solid #ccc;">
+                <p>Your browser does not support embedded documents.
+                    <a href="{{ route('documents.download', $document) }}">Download the document</a>
+                </p>
+            </iframe>
+        </div>
+        @elseif(in_array($document->mime_type, ['image/jpeg', 'image/jpg', 'image/png', 'image/tiff']))
+        <!-- For image files -->
+        <div style="text-align: center; margin: 20px 0; page-break-inside: avoid;">
+            <div style="border: 2px solid #333; padding: 10px; background-color: #f9f9f9; margin-bottom: 10px;">
+                <p style="margin: 0; font-weight: bold;">🖼️ Image Document: {{ $document->file_name }}</p>
+                <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">
+                    Original document content - {{ number_format($document->file_size / 1024, 1) }} KB
+                </p>
+            </div>
+            <img src="{{ route('documents.download', $document) }}" alt="{{ $document->title }}"
+                style="max-width: 100%; height: auto; border: 1px solid #333;">
+        </div>
+        @else
+        <!-- For other file types -->
+        <div
+            style="text-align: center; margin: 20px 0; padding: 30px; border: 2px dashed #333; background-color: #f9f9f9;">
+            <p style="margin: 0; font-weight: bold; font-size: 16px;">📎 {{ $document->file_name }}</p>
+            <p style="margin: 10px 0; color: #666;">
+                File Type: {{ strtoupper(pathinfo($document->file_name, PATHINFO_EXTENSION)) }} •
+                Size: {{ number_format($document->file_size / 1024, 1) }} KB
+            </p>
+            <p style="margin: 15px 0 0 0; font-style: italic;">
+                This file type cannot be displayed inline. Please download to view the original content.
+            </p>
+        </div>
+        @endif
+    </div>
 
-        .print\:px-0 {
-            padding-left: 0;
-            padding-right: 0;
-        }
+    <!-- Minutes Section -->
+    <div class="minutes-section">
+        <div class="minutes-header">
+            Minutes & Annotations ({{ $minutes->count() }} {{ $minutes->count() === 1 ? 'minute' : 'minutes' }})
+        </div>
 
-        .print\:p-4 {
-            padding: 1rem;
-        }
+        @forelse($minutes as $minute)
+        <div class="minute-item">
+            <div class="minute-header">
+                <div>
+                    <span class="minute-author">{{ $minute->creator->name }}</span>
+                    <span class="minute-date">{{ $minute->created_at->format('F j, Y \a\t g:i A') }}</span>
+                </div>
+                <div>
+                    <span class="minute-visibility visibility-{{ $minute->visibility }}">
+                        {{ ucfirst($minute->visibility) }}
+                    </span>
+                    @if($minute->hasOverlay())
+                    <span class="minute-visibility" style="background-color: #e1bee7; color: #4a148c;">
+                        Page {{ $minute->page_number }}
+                    </span>
+                    @endif
+                </div>
+            </div>
 
-        .print\:mt-4 {
-            margin-top: 1rem;
-        }
+            <div class="minute-body">
+                {{ $minute->body }}
+            </div>
 
-        .print\:mt-6 {
-            margin-top: 1.5rem;
-        }
+            @if($minute->hasOverlay())
+            <div class="minute-overlay-info">
+                📍 Positioned on page {{ $minute->page_number }} at coordinates ({{ number_format($minute->pos_x * 100,
+                1) }}%, {{ number_format($minute->pos_y * 100, 1) }}%)
+            </div>
+            @endif
 
-        .print\:mb-2 {
-            margin-bottom: 0.5rem;
-        }
+            @if($minute->getForwardedToName())
+            <div class="minute-forwarded">
+                <strong>📤 Forwarded to:</strong> {{ $minute->getForwardedToName() }}
+            </div>
+            @endif
+        </div>
+        @empty
+        <div class="no-minutes">
+            No minutes have been added to this document yet.
+        </div>
+        @endforelse
+    </div>
 
-        .print\:mb-3 {
-            margin-bottom: 0.75rem;
-        }
+    <!-- Print Footer -->
+    <div class="print-footer">
+        <p>Printed on {{ now()->format('F j, Y \a\t g:i A') }}</p>
+        <p>Document Workflow & Minutes Management System</p>
+    </div>
 
-        .print\:pt-4 {
-            padding-top: 1rem;
-        }
+    <script>
+        // Auto-print when page loads
+        window.onload = function() {
+            window.print();
+        };
+        
+        // Close window after printing (optional)
+        window.onafterprint = function() {
+            // Uncomment the line below if you want to auto-close the print window
+            // window.close();
+        };
+    </script>
+</body>
 
-        .print\:py-8 {
-            padding-top: 2rem;
-            padding-bottom: 2rem;
-        }
-
-        .print\:gap-4 {
-            gap: 1rem;
-        }
-
-        .print\:shadow-none {
-            box-shadow: none;
-        }
-
-        .print\:border-0 {
-            border-width: 0;
-        }
-
-        .print\:border {
-            border-width: 1px;
-        }
-
-        .print\:border-b {
-            border-bottom-width: 1px;
-        }
-
-        .print\:border-b-2 {
-            border-bottom-width: 2px;
-        }
-
-        .print\:border-t {
-            border-top-width: 1px;
-        }
-
-        .print\:border-black {
-            border-color: black;
-        }
-
-        .print\:border-gray-300 {
-            border-color: #d1d5db;
-        }
-
-        .print\:border-gray-400 {
-            border-color: #9ca3af;
-        }
-
-        .print\:border-gray-600 {
-            border-color: #4b5563;
-        }
-
-        .print\:border-dotted {
-            border-style: dotted;
-        }
-
-        .print\:bg-white {
-            background-color: white;
-        }
-
-        .print\:bg-gray-100 {
-            background-color: #f3f4f6;
-        }
-
-        .print\:text-xl {
-            font-size: 1.25rem;
-        }
-
-        .print\:text-sm {
-            font-size: 0.875rem;
-        }
-
-        .print\:text-xs {
-            font-size: 0.75rem;
-        }
-
-        .print\:text-gray-700 {
-            color: #374151;
-        }
-
-        .print\:font-bold {
-            font-weight: bold;
-        }
-
-        .print\:break-inside-avoid {
-            break-inside: avoid;
-        }
-
-        /* Hide non-print elements */
-        .no-print {
-            display: none !important;
-        }
-    }
-</style>
-
-<script>
-    // Auto-focus for printing
-window.onload = function() {
-    // Optional: Auto-print when page loads
-    // window.print();
-};
-</script>
-@endsection
+</html>

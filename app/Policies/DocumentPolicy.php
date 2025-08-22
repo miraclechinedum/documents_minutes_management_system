@@ -38,15 +38,15 @@ class DocumentPolicy
     /**
      * Determine whether the user can update the model.
      */
-    public function update(User $user, Document $document): bool
-    {
-        if (!$user->hasPermissionTo('documents.edit')) {
-            return false;
-        }
+    // public function update(User $user, Document $document): bool
+    // {
+    //     if (!$user->hasPermissionTo('documents.edit')) {
+    //         return false;
+    //     }
 
-        // Only creator or admin can edit
-        return $document->created_by === $user->id || $user->hasRole('admin');
-    }
+    //     // Only creator or admin can edit
+    //     return $document->created_by === $user->id || $user->hasRole('admin');
+    // }
 
     /**
      * Determine whether the user can delete the model.
@@ -73,15 +73,29 @@ class DocumentPolicy
         return $user->canViewDocument($document);
     }
 
+    // In app/Policies/DocumentPolicy.php
+
+    public function update(User $user, Document $document)
+    {
+        // Users can edit documents they created or if they're admins
+        return $user->id === $document->created_by || $user->hasRole('admin');
+    }
+
+    public function export(User $user, Document $document)
+    {
+        // Users can export documents they have access to
+        return $user->can('view', $document);
+    }
+
     /**
      * Determine whether the user can export the document.
      */
-    public function export(User $user, Document $document): bool
-    {
-        if (!$user->hasPermissionTo('print.export')) {
-            return false;
-        }
+    // public function export(User $user, Document $document): bool
+    // {
+    //     if (!$user->hasPermissionTo('print.export')) {
+    //         return false;
+    //     }
 
-        return $user->canViewDocument($document);
-    }
+    //     return $user->canViewDocument($document);
+    // }
 }

@@ -53,6 +53,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('/minutes/{minute}', [MinuteController::class, 'update'])->name('minutes.update');
     Route::delete('/minutes/{minute}', [MinuteController::class, 'destroy'])->name('minutes.destroy');
 
+    Route::get('/documents/{document}/preview', [DocumentController::class, 'preview'])
+        ->name('documents.preview');
+
     // Search routes
     Route::get('/search', [SearchController::class, 'index'])->name('search.index');
     Route::get('/api/search', [SearchController::class, 'api'])->name('search.api');
