@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 use setasign\Fpdi\Fpdi;
 
 class DocumentController extends Controller
@@ -165,14 +166,33 @@ class DocumentController extends Controller
     {
         $this->authorize('view', $document);
 
-        $document->load(['creator', 'assignedToUser', 'assignedToDepartment', 'minutes.creator', 'routes.fromUser', 'routes.toUser', 'routes.toDepartment']);
+        // Load document relations (light)
+        $document->load(['creator', 'assignedToUser', 'assignedToDepartment', 'routes.fromUser', 'routes.toUser', 'routes.toDepartment']);
 
-        $minutes = $document->minutes()->whereHas('document', function ($query) {
-            // Only show minutes the user can view
-            return $query;
-        })->get()->filter(function ($minute) {
-            return $minute->canViewBy(Auth::user());
-        });
+        // Prepare minutes payload for the JS viewer — include relative storage URLs
+        $minutes = $document->minutes()->with('creator')->get()
+            ->filter(function ($minute) {
+                return $minute->canViewBy(Auth::user());
+            })
+            ->map(function ($m) {
+                return [
+                    'id' => $m->id,
+                    'body' => $m->body,
+                    'visibility' => $m->visibility,
+                    'page_number' => $m->page_number,
+                    'pos_x' => $m->pos_x,
+                    'pos_y' => $m->pos_y,
+                    'box_style' => $m->box_style,
+                    'creator' => [
+                        'id' => $m->creator?->id,
+                        'name' => $m->creator?->name ?? 'Unknown',
+                    ],
+                    'attachment_path' => $m->attachment_path,
+                    // relative URL ensures same host/port as current page
+                    'attachment_url' => $m->attachment_path ? '/storage/' . ltrim($m->attachment_path, '/') : null,
+                    'created_at' => $m->created_at ? $m->created_at->format('F j, Y g:i A') : null,
+                ];
+            })->values()->toArray();
 
         return view('documents.show', compact('document', 'minutes'));
     }
@@ -495,10 +515,148 @@ class DocumentController extends Controller
         }
     }
 
+    /**
+     * Export the original document with minutes/annotations overlaid on the pages.
+     */
     private function exportWithOverlay(Document $document)
     {
-        // This would require more complex PDF processing
-        // For now, fallback to appendix mode
-        return $this->exportWithAppendix($document);
+        $document->load(['creator', 'assignedToUser', 'assignedToDepartment']);
+
+        $minutes = $document->minutes()->with('creator')->get()->filter(function ($minute) {
+            return $minute->canViewBy(Auth::user());
+        });
+
+        if ($document->mime_type !== 'application/pdf') {
+            return $this->exportWithAppendix($document);
+        }
+
+        try {
+            $pdf = new Fpdi();
+            $pageCount = $pdf->setSourceFile(Storage::path($document->file_path));
+            $minutesByPage = $minutes->groupBy(function ($m) {
+                return $m->page_number ?? 1;
+            });
+
+            for ($pageNo = 1; $pageNo <= $pageCount; $pageNo++) {
+                $templateId = $pdf->importPage($pageNo);
+                $size = $pdf->getTemplateSize($templateId);
+                $orientation = $size['width'] > $size['height'] ? 'L' : 'P';
+                $pdf->AddPage($orientation, [$size['width'], $size['height']]);
+                $pdf->useTemplate($templateId);
+
+                $pageMinutes = $minutesByPage->get($pageNo, collect([]));
+
+                foreach ($pageMinutes as $minute) {
+                    if ($minute->pos_x === null || $minute->pos_y === null) {
+                        continue;
+                    }
+
+                    $centerX = (float) $minute->pos_x * $size['width'];
+                    $anchorY = (float) $minute->pos_y * $size['height']; // anchor (bottom center)
+
+                    // If attachment exists and box_style provided, draw the image at recorded normalized size
+                    if ($minute->attachment_path && !empty($minute->box_style) && is_array($minute->box_style)) {
+                        $box = $minute->box_style;
+                        $normW = isset($box['w']) ? (float)$box['w'] : 0.15;
+                        $normH = isset($box['h']) ? (float)$box['h'] : 0;
+                        // compute target size
+                        $imgW = max(10, $normW * $size['width']);
+                        // If height not provided, scale by image aspect ratio
+                        $imgH = $normH > 0 ? max(10, $normH * $size['height']) : null;
+
+                        $attachmentFullPath = Storage::path($minute->attachment_path);
+
+                        // Try to get image size if imgH is null
+                        if ($imgH === null) {
+                            try {
+                                [$wPx, $hPx] = getimagesize($attachmentFullPath);
+                                if ($wPx > 0 && $hPx > 0) {
+                                    $ratio = $hPx / $wPx;
+                                    $imgH = $imgW * $ratio;
+                                } else {
+                                    $imgH = $imgW * 0.7;
+                                }
+                            } catch (\Exception $e) {
+                                $imgH = $imgW * 0.7;
+                            }
+                        }
+
+                        // center horizontally on centerX, bottom at anchorY
+                        $imgLeft = $centerX - ($imgW / 2);
+                        $imgTop = $anchorY - $imgH;
+
+                        $pad = 4;
+                        if ($imgLeft < $pad) $imgLeft = $pad;
+                        if ($imgLeft + $imgW > $size['width'] - $pad) $imgLeft = $size['width'] - $imgW - $pad;
+                        if ($imgTop < $pad) $imgTop = $pad;
+                        if ($imgTop + $imgH > $size['height'] - $pad) $imgTop = $size['height'] - $imgH - $pad;
+
+                        try {
+                            $pdf->Image($attachmentFullPath, $imgLeft, $imgTop, $imgW, $imgH);
+                        } catch (\Exception $e) {
+                            // If image drawing fails, fallback to text note below
+                            // no-op here; will fall through to text addition if needed
+                        }
+
+                        // also add author and timestamp under image (small)
+                        $pdf->SetFont('Arial', 'B', 7);
+                        $author = $minute->creator ? $minute->creator->name : 'Unknown';
+                        $timestamp = $minute->created_at ? $minute->created_at->format('F j, Y g:i A') : '';
+                        $pdf->SetXY($imgLeft, $imgTop + $imgH + 1);
+                        $pdf->Cell(min($imgW, 80), 4, mb_strimwidth($author, 0, 30, '…'), 0, 0, 'L');
+                        $pdf->Cell($imgW - min($imgW, 80), 4, $timestamp, 0, 0, 'R');
+
+                        continue;
+                    }
+
+                    // Fallback: render text note (original behavior)
+                    $noteWidth = min(140, $size['width'] * 0.25);
+                    $noteHeight = min(64, $size['height'] * 0.15);
+                    $noteLeft = $centerX - ($noteWidth / 2);
+                    $pad = 6;
+                    if ($noteLeft < $pad) $noteLeft = $pad;
+                    if ($noteLeft + $noteWidth > $size['width'] - $pad) $noteLeft = $size['width'] - $noteWidth - $pad;
+                    $noteTop = $anchorY - $noteHeight;
+                    if ($noteTop < $pad) $noteTop = $pad;
+                    if ($noteTop + $noteHeight > $size['height'] - $pad) $noteTop = $size['height'] - $noteHeight - $pad;
+
+                    $pdf->SetFillColor(255, 249, 196);
+                    $pdf->SetDrawColor(200, 180, 80);
+                    $pdf->SetLineWidth(0.4);
+                    $pdf->Rect($noteLeft, $noteTop, $noteWidth, $noteHeight, 'DF');
+
+                    $pdf->SetTextColor(20, 20, 20);
+                    $pdf->SetFont('Arial', '', 8);
+                    $text = trim((string)$minute->body);
+                    if (mb_strlen($text) > 1500) {
+                        $text = mb_substr($text, 0, 1500) . '…';
+                    }
+                    $innerX = $noteLeft + 4;
+                    $innerWidth = $noteWidth - 8;
+                    $pdf->SetXY($innerX, $noteTop + 4);
+                    $pdf->MultiCell($innerWidth, 4.2, $text, 0);
+                    $pdf->SetFont('Arial', 'B', 7);
+                    $author = $minute->creator ? $minute->creator->name : 'Unknown';
+                    $timestamp = $minute->created_at ? $minute->created_at->format('F j, Y g:i A') : '';
+                    $bottomY = $noteTop + $noteHeight - 8;
+                    $pdf->SetXY($innerX, $bottomY);
+                    $half = floor($innerWidth / 2);
+                    $pdf->Cell($half, 4, mb_strimwidth($author, 0, 30, '…'), 0, 0, 'L');
+                    $pdf->Cell($innerWidth - $half, 4, $timestamp, 0, 0, 'R');
+                }
+            }
+
+            $filename = \Illuminate\Support\Str::slug($document->title) . '_annotated.pdf';
+            return response($pdf->Output('S'), 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('PDF overlay export failed: ' . $e->getMessage(), [
+                'document_id' => $document->id,
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return $this->exportWithAppendix($document);
+        }
     }
 }

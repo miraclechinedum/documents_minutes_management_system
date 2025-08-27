@@ -36,9 +36,13 @@ class MinuteController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        // Store attachment on the public disk so it will live under storage/app/public/...
         $attachmentPath = null;
         if ($request->hasFile('attachment')) {
-            $attachmentPath = $request->file('attachment')->store('minute-attachments');
+            // store under storage/app/public/minute-attachments/...
+            $attachmentPath = $request->file('attachment')->store('minute-attachments', 'public');
+            // optional: ensure visibility - usually not needed for public disk
+            // \Illuminate\Support\Facades\Storage::disk('public')->setVisibility($attachmentPath, 'public');
         }
 
         $minute = Minute::create([
@@ -55,7 +59,7 @@ class MinuteController extends Controller
             'attachment_path' => $attachmentPath,
         ]);
 
-        // Handle forwarding
+        // Handle forwarding if provided
         if ($request->forwarded_to_type && $request->forwarded_to_id) {
             $this->handleForwarding($document, $minute, $request->forwarded_to_type, $request->forwarded_to_id);
         }
@@ -64,9 +68,32 @@ class MinuteController extends Controller
             ->performedOn($minute)
             ->log('minute.created');
 
+        // Eager load creator for response
+        $minute->load('creator');
+
+        // Build payload — use relative /storage/... URL to avoid APP_URL/host mismatch
+        $attachmentUrl = $minute->attachment_path ? '/storage/' . ltrim($minute->attachment_path, '/') : null;
+
+        $payload = [
+            'id' => $minute->id,
+            'body' => $minute->body,
+            'visibility' => $minute->visibility,
+            'page_number' => $minute->page_number,
+            'pos_x' => $minute->pos_x,
+            'pos_y' => $minute->pos_y,
+            'box_style' => $minute->box_style,
+            'creator' => [
+                'id' => $minute->creator?->id,
+                'name' => $minute->creator?->name ?? 'Unknown',
+            ],
+            'attachment_path' => $minute->attachment_path,
+            'attachment_url' => $attachmentUrl,
+            'created_at' => $minute->created_at ? $minute->created_at->format('F j, Y g:i A') : null,
+        ];
+
         return response()->json([
             'success' => true,
-            'minute' => $minute->load('creator'),
+            'minute' => $payload,
         ]);
     }
 
@@ -75,22 +102,56 @@ class MinuteController extends Controller
         $this->authorize('update', $minute);
 
         $validator = Validator::make($request->all(), [
-            'body' => 'required|string',
-            'visibility' => 'required|in:public,department,internal',
+            // allow partial updates: only validate body/visibility if they are present
+            'body' => 'sometimes|required|string',
+            'visibility' => 'sometimes|required|in:public,department,internal',
+
+            // allow updating overlay position
+            'pos_x' => 'nullable|numeric|min:0|max:1',
+            'pos_y' => 'nullable|numeric|min:0|max:1',
+            'page_number' => 'nullable|integer|min:1',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $minute->update([
-            'body' => $request->body,
-            'visibility' => $request->visibility,
-        ]);
+        $data = [];
+
+        if ($request->has('body')) {
+            $data['body'] = $request->input('body');
+        }
+
+        if ($request->has('visibility')) {
+            $data['visibility'] = $request->input('visibility');
+        }
+
+        if ($request->has('pos_x')) {
+            $data['pos_x'] = $request->input('pos_x');
+        }
+
+        if ($request->has('pos_y')) {
+            $data['pos_y'] = $request->input('pos_y');
+        }
+
+        if ($request->has('page_number')) {
+            $data['page_number'] = $request->input('page_number');
+        }
+
+        // If nothing to update, return a 400-ish response (optional)
+        if (empty($data)) {
+            return response()->json(['message' => 'No updatable fields provided.'], 400);
+        }
+
+        $minute->update($data);
+
+        activity()
+            ->performedOn($minute)
+            ->log('minute.updated');
 
         return response()->json([
             'success' => true,
-            'minute' => $minute->load('creator'),
+            'minute' => $minute->fresh()->load('creator'),
         ]);
     }
 
@@ -132,7 +193,7 @@ class MinuteController extends Controller
                 'assigned_to_department_id' => null,
                 'status' => Document::STATUS_IN_PROGRESS,
             ]);
-            
+
             // Notify user
             $user = User::find($toId);
             if ($user) {
@@ -144,7 +205,7 @@ class MinuteController extends Controller
                 'assigned_to_department_id' => $toId,
                 'status' => Document::STATUS_IN_PROGRESS,
             ]);
-            
+
             // Notify department users
             $department = Department::find($toId);
             if ($department) {
