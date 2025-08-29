@@ -10,6 +10,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use App\Notifications\DocumentAssigned;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use setasign\Fpdi\Fpdi;
@@ -67,10 +69,14 @@ class DocumentController extends Controller
         $sortDirection = $request->get('direction', 'desc');
         $query->orderBy($sortBy, $sortDirection);
 
-        $documents = $query->paginate(12)->appends($request->query());
-        $departments = Department::where('is_active', true)->get();
+        // PAGINATE: 10 per page
+        $documents = $query->paginate(10)->appends($request->query());
 
-        return view('documents.index', compact('documents', 'departments'));
+        // Pass departments and users so the embedded upload form can populate selects
+        $departments = Department::where('is_active', true)->get();
+        $users = User::where('is_active', true)->get();
+
+        return view('documents.index', compact('documents', 'departments', 'users'));
     }
 
     public function create()
@@ -91,7 +97,7 @@ class DocumentController extends Controller
             'title' => 'required|string|max:255',
             'reference_number' => 'nullable|string|max:100|unique:documents',
             'description' => 'nullable|string',
-            'file' => 'required|file|mimes:pdf,jpg,jpeg,png,tif,tiff|max:' . (config('document_workflow.max_upload_size', 52428800) / 1024),
+            'file' => 'required|file|mimes:pdf,jpg,jpeg,png,tif,tiff|max:' . ((int) (config('document_workflow.max_upload_size', 52428800) / 1024)),
             'assigned_to_type' => 'required|in:user,department',
             'assigned_to_id' => 'required|integer',
             'priority' => 'required|in:low,medium,high',
@@ -99,6 +105,9 @@ class DocumentController extends Controller
         ]);
 
         if ($validator->fails()) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['errors' => $validator->errors()], 422);
+            }
             return back()->withErrors($validator)->withInput();
         }
 
@@ -107,19 +116,29 @@ class DocumentController extends Controller
         $fileExtension = $file->getClientOriginalExtension();
         $storedFileName = Str::uuid() . '.' . $fileExtension;
 
-        // Store file
+        // Store file on local disk under documents/
         $filePath = $file->storeAs('documents', $storedFileName, 'local');
 
-        // Calculate checksum
-        $checksum = hash_file('sha256', Storage::path($filePath));
-
-        // Get pages count for PDF
-        $pages = null;
-        if ($file->getMimeType() === 'application/pdf') {
-            $pages = $this->getPdfPageCount(Storage::path($filePath));
+        // Calculate checksum (sha256)
+        $checksum = null;
+        try {
+            $checksum = hash_file('sha256', Storage::path($filePath));
+        } catch (\Exception $e) {
+            Log::warning('Failed to compute checksum for file: ' . ($filePath ?? 'n/a') . ' - ' . $e->getMessage());
         }
 
-        // Create document record
+        // Get pages count for PDF files
+        $pages = null;
+        try {
+            if ($file->getMimeType() === 'application/pdf') {
+                $pages = $this->getPdfPageCount(Storage::path($filePath));
+            }
+        } catch (\Exception $e) {
+            Log::warning('Failed to determine PDF page count: ' . $e->getMessage());
+            $pages = null;
+        }
+
+        // Determine assignment IDs
         $assignedToUserId = null;
         $assignedToDepartmentId = null;
 
@@ -129,6 +148,7 @@ class DocumentController extends Controller
             $assignedToDepartmentId = $request->assigned_to_id;
         }
 
+        // Create the document record
         $document = Document::create([
             'title' => $request->title,
             'reference_number' => $request->reference_number,
@@ -147,19 +167,73 @@ class DocumentController extends Controller
             'description' => $request->description,
         ]);
 
-        // Generate thumbnail for images
-        if (in_array($file->getMimeType(), ['image/jpeg', 'image/png', 'image/tiff'])) {
-            $this->generateThumbnail($document);
+        // Generate thumbnail for images (non-blocking method call — keeps controller simple)
+        try {
+            if (in_array($file->getMimeType(), ['image/jpeg', 'image/png', 'image/tiff'])) {
+                $this->generateThumbnail($document);
+            }
+        } catch (\Exception $e) {
+            Log::warning('Thumbnail generation failed for document ' . $document->id . ': ' . $e->getMessage());
         }
 
-        // Queue virus scan
-        ScanDocumentForVirus::dispatch($document);
+        // Queue virus scan job
+        try {
+            ScanDocumentForVirus::dispatch($document);
+        } catch (\Exception $e) {
+            Log::warning('Failed to dispatch virus scan for document ' . $document->id . ': ' . $e->getMessage());
+        }
 
+        // Activity log
         activity()
             ->performedOn($document)
             ->log('document.uploaded');
 
-        return redirect()->route('documents.index')->with('success', 'Document uploaded successfully and queued for scanning.');
+        // Dispatch notifications to assignee(s)
+        try {
+            $assignedBy = Auth::user();
+
+            if ($request->assigned_to_type === 'user' && $assignedToUserId) {
+                $recipient = User::where('is_active', true)->find($assignedToUserId);
+                if ($recipient) {
+                    \Illuminate\Support\Facades\Notification::send(
+                        $recipient,
+                        new \App\Notifications\DocumentAssignedNotification($document, $assignedBy)
+                    );
+                }
+            } elseif ($request->assigned_to_type === 'department' && $assignedToDepartmentId) {
+                // notify all active users in the department
+                $recipients = User::where('department_id', $assignedToDepartmentId)
+                    ->where('is_active', true)
+                    ->get();
+
+                if ($recipients->isNotEmpty()) {
+                    \Illuminate\Support\Facades\Notification::send(
+                        $recipients,
+                        new \App\Notifications\DocumentAssignedNotification($document, $assignedBy)
+                    );
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning('Failed to notify assignees for document ' . $document->id . ': ' . $e->getMessage());
+        }
+
+        $successMessage = 'Document uploaded successfully and queued for scanning.';
+
+        if ($request->ajax() || $request->wantsJson()) {
+            // return minimal JSON that frontend can use
+            return response()->json([
+                'success' => true,
+                'message' => $successMessage,
+                'document' => [
+                    'id' => $document->id,
+                    'title' => $document->title,
+                    'created_by' => $document->creator?->name,
+                    'created_at' => $document->created_at?->toDateTimeString(),
+                ],
+            ], 201);
+        }
+
+        return redirect()->route('documents.index')->with('success', $successMessage);
     }
 
     public function show(Document $document)

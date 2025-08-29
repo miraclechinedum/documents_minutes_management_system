@@ -102,16 +102,16 @@
                         <div>
                             <label for="file" class="block text-sm font-medium text-gray-700 mb-3">Document File
                                 *</label>
-                            <div
+                            <div id="drop-area"
                                 class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-gray-400 transition-colors duration-200">
-                                <div class="space-y-1 text-center">
+                                <div class="space-y-1 text-center w-full">
                                     <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none"
                                         viewBox="0 0 48 48">
                                         <path
                                             d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
                                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                                     </svg>
-                                    <div class="flex text-sm text-gray-600">
+                                    <div class="flex items-center justify-center text-sm text-gray-600">
                                         <label for="file"
                                             class="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500">
                                             <span>Upload a file</span>
@@ -130,7 +130,7 @@
                             @enderror
 
                             <!-- File Preview -->
-                            <div id="file-preview" class="mt-4 hidden"></div>
+                            <div id="file-preview" class="mt-4"></div>
                         </div>
                     </div>
 
@@ -211,89 +211,149 @@
 </div>
 
 <script>
-    // Handle assignment type change
-document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function() {
     const assignedToType = document.getElementById('assigned_to_type');
     const assignedToId = document.getElementById('assigned_to_id');
     
     assignedToType.addEventListener('change', function() {
-    const type = this.value;
-    
-    // Clear existing options
-    assignedToId.innerHTML = '<option value="">Select...</option>';
-    
-    if (type === 'user') {
-        // Populate with users
-        const users = @json($users ?? []);
-        users.forEach(user => {
-            const option = document.createElement('option');
-            option.value = user.id;
-            option.textContent = user.name;
-            if ('{{ old('assigned_to_id') }}' == user.id) {
-                option.selected = true;
-            }
-            assignedToId.appendChild(option);
-        });
-    } else if (type === 'department') {
-        // Populate with departments
-        const departments = @json($departments ?? []);
-        departments.forEach(department => {
-            const option = document.createElement('option');
-            option.value = department.id;
-            option.textContent = department.name;
-            if ('{{ old('assigned_to_id') }}' == department.id) {
-                option.selected = true;
-            }
-            assignedToId.appendChild(option);
-        });
-    }
+        const type = this.value;
+        assignedToId.innerHTML = '<option value="">Select...</option>';
+        
+        if (type === 'user') {
+            const users = @json($users ?? []);
+            users.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.id;
+                option.textContent = user.name;
+                if ('{{ old('assigned_to_id') }}' == user.id) {
+                    option.selected = true;
+                }
+                assignedToId.appendChild(option);
+            });
+        } else if (type === 'department') {
+            const departments = @json($departments ?? []);
+            departments.forEach(department => {
+                const option = document.createElement('option');
+                option.value = department.id;
+                option.textContent = department.name;
+                if ('{{ old('assigned_to_id') }}' == department.id) {
+                    option.selected = true;
+                }
+                assignedToId.appendChild(option);
+            });
+        }
     });
 
-    // Trigger change event on page load if there's an old value
     if (assignedToType.value) {
         assignedToType.dispatchEvent(new Event('change'));
     }
 });
 
-// File preview function
+// File preview using blob URLs (client-side)
 function previewFile(input) {
     const preview = document.getElementById('file-preview');
-    
-    if (input.files && input.files[0]) {
-        const file = input.files[0];
-        const fileSize = file.size < 1024 * 1024 ? 
-            (file.size / 1024).toFixed(1) + ' KB' : 
-            (file.size / 1024 / 1024).toFixed(2) + ' MB';
-        
-        preview.innerHTML = `
-            <div class="flex items-center space-x-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-                <div class="flex-shrink-0">
-                    <svg class="h-10 w-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <p class="text-sm font-medium text-green-900 truncate">${file.name}</p>
-                    <p class="text-sm text-green-700">${fileSize} • ${file.type}</p>
-                </div>
-                <div class="flex-shrink-0">
-                    <button type="button" onclick="clearFile()" class="text-red-600 hover:text-red-500 p-1">
-                        <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                        </svg>
-                    </button>
-                </div>
+    preview.innerHTML = '';
+    preview.classList.add('hidden');
+
+    if (!(input.files && input.files[0])) return;
+
+    const file = input.files[0];
+    const fileSize = file.size < 1024 * 1024 ?
+        (file.size / 1024).toFixed(1) + ' KB' :
+        (file.size / 1024 / 1024).toFixed(2) + ' MB';
+
+    const container = document.createElement('div');
+    container.className = 'p-4 bg-white border rounded-lg shadow-sm';
+
+    // Header info
+    const header = document.createElement('div');
+    header.className = 'flex items-start space-x-4';
+
+    const meta = document.createElement('div');
+    meta.className = 'flex-1 min-w-0';
+
+    const title = document.createElement('p');
+    title.className = 'text-sm font-medium text-gray-900 truncate';
+    title.textContent = file.name;
+
+    const info = document.createElement('p');
+    info.className = 'text-sm text-gray-500';
+    info.textContent = `${fileSize} • ${file.type || 'Unknown type'}`;
+
+    meta.appendChild(title);
+    meta.appendChild(info);
+
+    const actions = document.createElement('div');
+    actions.className = 'flex-shrink-0';
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.onclick = clearFile;
+    clearBtn.className = 'text-red-600 hover:text-red-500 p-1';
+    clearBtn.innerHTML = `<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>`;
+    actions.appendChild(clearBtn);
+
+    header.appendChild(meta);
+    header.appendChild(actions);
+
+    container.appendChild(header);
+
+    // Preview area
+    const previewArea = document.createElement('div');
+    previewArea.className = 'mt-4';
+
+    const blobUrl = URL.createObjectURL(file);
+
+    if (file.type.startsWith('image/')) {
+        // Image thumbnail
+        const img = document.createElement('img');
+        img.src = blobUrl;
+        img.alt = file.name;
+        img.className = 'max-w-full max-h-64 rounded-md border';
+        previewArea.appendChild(img);
+    } else if (file.type === 'application/pdf') {
+        // PDF embed - <object> falls back gracefully
+        const obj = document.createElement('object');
+        obj.data = blobUrl;
+        obj.type = 'application/pdf';
+        obj.width = '100%';
+        obj.height = '500';
+        obj.className = 'border rounded-md';
+        // fallback message
+        obj.innerHTML = `<p>Preview not available. <a href="${blobUrl}" target="_blank" rel="noopener">Open PDF in new tab</a></p>`;
+        previewArea.appendChild(obj);
+    } else {
+        // Generic file: show big icon and a download link to the blob
+        const generic = document.createElement('div');
+        generic.className = 'flex items-center space-x-4';
+        generic.innerHTML = `
+            <div class="flex-shrink-0">
+                <svg class="h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path d="M7 7v10l5-3 5 3V7z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+            </div>
+            <div>
+                <p class="text-sm text-gray-700 truncate">${file.name}</p>
+                <p class="text-xs text-gray-500">Preview unavailable — <a href="${blobUrl}" target="_blank" rel="noopener" class="underline">open file</a></p>
             </div>
         `;
-        preview.classList.remove('hidden');
+        previewArea.appendChild(generic);
     }
+
+    container.appendChild(previewArea);
+    preview.appendChild(container);
+    preview.classList.remove('hidden');
+
+    // Revoke object URL once the document is unloaded to free memory
+    window.addEventListener('beforeunload', () => URL.revokeObjectURL(blobUrl));
 }
 
 function clearFile() {
-    document.getElementById('file').value = '';
+    const input = document.getElementById('file');
+    if (input) input.value = '';
     const preview = document.getElementById('file-preview');
     preview.classList.add('hidden');
     preview.innerHTML = '';
 }
 </script>
+
 @endsection
